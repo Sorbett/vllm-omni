@@ -278,6 +278,11 @@ def talker2code2wav_async_chunk(
         return payload
 
 
+# Decode consumes request.output_token_ids even when no multimodal tensor is
+# emitted. Let the scheduler enqueue these updates before EOS.
+talker2code2wav_async_chunk.requires_token_updates = True  # type: ignore[attr-defined]
+
+
 # ============================================================================
 # Worker-connector data plane (non-async-chunk path).
 # cosyvoice3 talker emits `multimodal_outputs={"embed": {"speech_token": t,

@@ -1704,7 +1704,7 @@ class GPUARModelRunner(OmniGPUModelRunner, OmniConnectorModelRunnerMixin, Duplex
         )
         return inter_stage_outputs, multimodal_outputs
 
-    def _should_use_async_omni_output(self) -> bool:
+    def _should_use_async_omni_output(self, multimodal_outputs: object = None) -> bool:
         if not self.use_async_scheduling:
             return False
         if self.omni_prefix_cache is not None:
@@ -1722,6 +1722,12 @@ class GPUARModelRunner(OmniGPUModelRunner, OmniConnectorModelRunnerMixin, Duplex
 
         model = getattr(self, "model", None)
         if not self._model_omni_flag(model, "use_async_omni_output"):
+            return False
+        # Token-only steps need no tensor materialization. Building their
+        # lightweight output inline avoids creating a background task per token.
+        if not self._model_omni_pooler_payload_include_hidden() and (
+            multimodal_outputs is None or (isinstance(multimodal_outputs, dict) and not multimodal_outputs)
+        ):
             return False
         if self._model_omni_flag(model, "has_postprocess") and not self._model_omni_flag(
             model, "eager_omni_postprocess_before_async_output"
@@ -2208,7 +2214,7 @@ class GPUARModelRunner(OmniGPUModelRunner, OmniConnectorModelRunnerMixin, Duplex
             dict(num_nans_in_logits) if isinstance(num_nans_in_logits, dict) else num_nans_in_logits
         )
 
-        use_async_omni_output = self._should_use_async_omni_output()
+        use_async_omni_output = self._should_use_async_omni_output(multimodal_outputs)
         omni_postprocess_already_applied = False
         if use_async_omni_output:
             omni_postprocess_already_applied = self._maybe_run_eager_omni_postprocess_before_async_output(

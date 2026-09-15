@@ -22,6 +22,7 @@ from vllm_omni.core.sched.omni_ar_scheduler import OmniARAsyncScheduler, OmniARS
 from vllm_omni.distributed.omni_connectors.transfer_adapter.chunk_transfer_adapter import (
     OmniChunkTransferAdapter,
 )
+from vllm_omni.model_executor.stage_input_processors.cosyvoice3 import talker2code2wav_async_chunk
 
 # isort: on
 
@@ -248,7 +249,9 @@ def test_resumable_segment_boundary_keeps_pre_transition_send_watermark() -> Non
     )
 
 
-def test_running_decode_step_without_inter_stage_payload_does_not_raise() -> None:
+@pytest.mark.parametrize("processor", [None, talker2code2wav_async_chunk], ids=["no_opt_in", "cosyvoice3"])
+@pytest.mark.parametrize("new_token_ids", [[], [42]], ids=["no_tokens", "sampled_token"])
+def test_running_decode_step_without_inter_stage_payload_does_not_raise(processor, new_token_ids, mocker) -> None:
     """A decode step that neither stops nor carries an inter-stage payload.
 
     ``finished`` is only assigned when the request stops, yet the async-chunk
@@ -258,13 +261,14 @@ def test_running_decode_step_without_inter_stage_payload_does_not_raise() -> Non
     session = _make_request()
     session.status = RequestStatus.RUNNING
 
-    sched = MagicMock()
+    sched = mocker.MagicMock()
     sched.requests = {session.request_id: session}
     sched.perf_metrics = None
     sched.structured_output_manager.should_advance.return_value = False
-    sched._update_request_with_output.return_value = ([42], False)
+    sched._update_request_with_output.return_value = (new_token_ids, False)
     sched._process_kv_transfer_trigger.return_value = False
-    sched.chunk_transfer_adapter = MagicMock()
+    sched.chunk_transfer_adapter = mocker.MagicMock()
+    sched.chunk_transfer_adapter.custom_process_next_stage_input_func = processor
     sched.running = [session]
     sched.waiting_for_transfer_free = set()
     sched.transfer_triggered_requests = set()
@@ -276,13 +280,13 @@ def test_running_decode_step_without_inter_stage_payload_does_not_raise() -> Non
     sched.finished_req_ids_dict = {}
     sched.make_stats.return_value = None
 
-    scheduler_output = MagicMock(spec=SchedulerOutput)
+    scheduler_output = mocker.MagicMock(spec=SchedulerOutput)
     scheduler_output.num_scheduled_tokens = {session.request_id: 1}
     scheduler_output.scheduled_spec_decode_tokens = {}
     scheduler_output.num_invalid_spec_tokens = 0
 
-    model_runner_output = MagicMock(spec=ModelRunnerOutput)
-    model_runner_output.sampled_token_ids = [[42]]
+    model_runner_output = mocker.MagicMock(spec=ModelRunnerOutput)
+    model_runner_output.sampled_token_ids = [new_token_ids]
     model_runner_output.logprobs = None
     model_runner_output.prompt_logprobs_dict = {}
     model_runner_output.pooler_output = None
@@ -295,8 +299,18 @@ def test_running_decode_step_without_inter_stage_payload_does_not_raise() -> Non
 
     OmniARScheduler.update_from_output(sched, scheduler_output, model_runner_output)
 
-    # Nothing to hand downstream: no payload, no segment boundary, not finished.
-    sched.chunk_transfer_adapter.save_async.assert_not_called()
+    if processor is None or not new_token_ids:
+        # Tensor-only processors preserve their existing emission condition.
+        sched.chunk_transfer_adapter.save_async.assert_not_called()
+    else:
+        # CosyVoice3 needs each sampled codec ID even without a hidden payload.
+        sched.chunk_transfer_adapter.save_async.assert_called_once_with(
+            None,
+            session,
+            False,
+            new_token_ids=[42],
+            confirmed_num_computed_tokens=None,
+        )
 
 
 def test_queued_streaming_update_on_async_stop_fences_in_flight_once() -> None:

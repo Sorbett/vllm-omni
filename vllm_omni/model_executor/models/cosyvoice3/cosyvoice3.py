@@ -501,6 +501,12 @@ class CosyVoice3Model(
         self.model_dir = model_dir
         self.model = None
         if self.model_stage == "cosyvoice3_talker":
+            # Build conditioning payloads outside the AR decode critical path.
+            # The async-chunk processor opts into sampled-token updates, so
+            # streaming does not need a hidden-state payload on every step.
+            self.use_async_omni_output = True
+            if getattr(vllm_config.model_config, "async_chunk", False):
+                self.omni_pooler_payload_include_hidden = False
             # Initialize talker stage (text to speech tokens)
             from vllm_omni.model_executor.models.cosyvoice3.cosyvoice3_talker import CosyVoice3LM, VLLMQwen2Encoder
 

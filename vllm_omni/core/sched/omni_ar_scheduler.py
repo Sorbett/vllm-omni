@@ -172,9 +172,11 @@ class OmniARScheduler(OmniSchedulerMixin, VLLMScheduler):
         finished_status: RequestStatus,
     ) -> list[Request]:
         """Finish requests and discard any incomplete KV-wait timing."""
+        cleanup_ids: tuple[str, ...]
+        finish_request_ids: str | Iterable[str] | None
         if isinstance(request_ids, str):
             cleanup_ids = (request_ids,)
-            finish_request_ids: str | tuple[str, ...] | None = request_ids
+            finish_request_ids = request_ids
         elif request_ids is None:
             cleanup_ids = ()
             finish_request_ids = None
@@ -341,6 +343,9 @@ class OmniARScheduler(OmniSchedulerMixin, VLLMScheduler):
         pooler_outputs = model_runner_output.pooler_output
         mm_outputs = getattr(model_runner_output, "multimodal_outputs", None)
         inter_stage_outputs = getattr(model_runner_output, "inter_stage_outputs", None)
+        # Token-only processors need sampled IDs even without a tensor payload.
+        processor = getattr(getattr(self, "chunk_transfer_adapter", None), "custom_process_next_stage_input_func", None)
+        requires_token_updates = getattr(processor, "requires_token_updates", False) is True
         num_nans_in_logits = model_runner_output.num_nans_in_logits
         kv_connector_output = model_runner_output.kv_connector_output
         ec_connector_output = getattr(model_runner_output, "ec_connector_output", None)
@@ -680,7 +685,10 @@ class OmniARScheduler(OmniSchedulerMixin, VLLMScheduler):
                 assert not prompt_logprobs_tensors
 
             if self.chunk_transfer_adapter is not None and (
-                inter_stage_output is not None or is_segment_finished or finished
+                inter_stage_output is not None
+                or (new_token_ids and requires_token_updates)
+                or is_segment_finished
+                or finished
             ):
                 save_kwargs = {
                     "new_token_ids": new_token_ids,
@@ -850,6 +858,7 @@ class OmniARScheduler(OmniSchedulerMixin, VLLMScheduler):
                 # This streaming update has already been dequeued. Report the
                 # permanent contract failure so the next scheduling pass
                 # finishes only this request instead of crashing EngineCore.
+                assert self.chunk_transfer_adapter is not None
                 self.chunk_transfer_adapter.record_receive_failure(req_id, str(exc))
                 return
             if replaced is not None:

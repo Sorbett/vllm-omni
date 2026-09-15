@@ -99,6 +99,24 @@ Qwen3-TTS uses the same mechanism in its AR Talker stage. The Talker updates
 the decode state it needs for the next step before returning, then constructs
 the codec payload for Code2Wav in the background.
 
+CosyVoice3 also uses the mechanism in its AR Talker stage. Its async-chunk
+processor builds Code2Wav input from sampled codec tokens and prompt
+conditioning. In async-chunk mode the Talker omits hidden states from the
+payload, while prefill conditioning still receives safe snapshots. Its chunk
+processor declares `requires_token_updates = True`, allowing the scheduler to
+enqueue sampled codec IDs even when a decode step has no tensor payload.
+Without this opt-in, omitting hidden states would suppress intermediate chunks
+until EOS. Other processors keep their existing tensor-payload trigger. The
+Talker has no postprocess hook that needs an eager state update for the next
+decode step.
+
+When a step has neither a hidden payload nor multimodal outputs, the runner
+constructs the lightweight token-only response inline. There is no tensor
+materialization to overlap, so this avoids a background task on every decode
+step while preserving asynchronous sampled-token feedback. CosyVoice3 uses
+background materialization for prefill conditioning and this lightweight path
+for ordinary decode steps.
+
 ## Performance
 
 In the controlled Qwen3-Omni optimization sweep, enabling async output
@@ -106,7 +124,7 @@ materialization on top of CUDA Graph and async chunk produced the following
 results at concurrency 64:
 
 | Configuration | Request throughput | Mean audio TTFP | Mean audio RTF |
-|---|---:|---:|---:|
+| --- | ---: | ---: | ---: |
 | CUDA Graph + async chunk | 9.3 req/s | 655 ms | 0.63 |
 | + async output materialization | 11.3 req/s | 631 ms | 0.47 |
 | Change | **+22%** | **-4%** | **-25%** |
@@ -223,7 +241,7 @@ outputs are not deferred because they affect scheduler-visible request state.
 ### Qwen3-Omni Stage Behavior
 
 | Stage | Async output behavior | Reason |
-|---|---|---|
+| --- | --- | --- |
 | Thinker | Snapshots hidden states and multimodal outputs; builds the downstream payload in the background | The Talker needs the payload, but the next Thinker decode step only needs sampled-token feedback |
 | Talker | Runs lightweight postprocess eagerly; snapshots codec outputs; omits hidden states from the downstream payload | `hidden_states.last` is needed by the next Talker step, while Code2Wav only needs codec codes |
 | Code2Wav | Uses the normal generation-stage output path | Code2Wav is not executed by `GPUARModelRunner` |
@@ -317,6 +335,29 @@ the background. Stage 1 uses the generation-stage output path.
 The same behavior applies to the Base and VoiceDesign Qwen3-TTS checkpoints
 because they use the same Talker implementation.
 
+### Example 3: CosyVoice3
+
+Start the CosyVoice3 pipeline:
+
+```bash
+vllm serve FunAudioLLM/Fun-CosyVoice3-0.5B-2512 \
+  --omni \
+  --trust-remote-code \
+  --port 8091
+```
+
+The model registry automatically loads `vllm_omni/deploy/cosyvoice3.yaml`,
+which enables async chunk and disables prefix caching. AR async scheduling
+defaults to enabled. Async output
+materialization activates for Stage 0, the AR Talker. Stage 1, Code2Wav, uses
+the normal generation-stage output path.
+
+For a CosyVoice3 performance comparison, keep async chunk and async scheduling
+enabled in both runs and change only the Talker's output-materialization
+behavior. Compare per-step decode time and streaming output correctness on the
+same hardware and inputs. The Qwen3-Omni performance figures above do not
+predict CosyVoice3's benefit; see [RFC #6870, B2](https://github.com/vllm-project/vllm-omni/issues/6870).
+
 !!! warning
     Do not pass `--no-async-chunk` or enable prefix caching when you want this
     optimization. Either change causes the runner to fall back to synchronous
@@ -337,10 +378,11 @@ because they use the same Talker implementation.
 runtime conditions hold:
 
 | Requirement | Reason |
-|---|---|
+| --- | --- |
 | AR async scheduling is enabled | The optimization relies on the scheduler advancing while the prior output is materialized |
 | `async_chunk` is enabled | The feature targets incremental downstream Omni payloads |
 | The model stage opts in with `use_async_omni_output` | Models must declare that their output lifecycle is safe to defer |
+| A hidden or multimodal payload is present | Token-only steps skip background materialization and retain async sampled-token feedback |
 | Omni prefix cache is disabled | Prefix-cache merge and update ordering currently requires synchronous materialization |
 | Speculative decoding is disabled | Speculative output state is not included in this deferred path |
 | Routed-expert output is disabled | Routed-expert extraction currently requires the synchronous path |
@@ -377,6 +419,13 @@ so Omni payload materialization remains synchronous.
 - `vllm_omni/model_executor/models/qwen3_tts/qwen3_tts_talker.py`: Qwen3-TTS
   Talker opt-in and eager postprocess behavior.
 - `vllm_omni/deploy/qwen3_tts.yaml`: Default Qwen3-TTS deployment settings.
+- `vllm_omni/model_executor/models/cosyvoice3/cosyvoice3.py`: CosyVoice3
+  Talker opt-in and hidden-state payload behavior.
+- `vllm_omni/model_executor/stage_input_processors/cosyvoice3.py`: CosyVoice3
+  chunk processor's sampled-token update contract.
+- `vllm_omni/core/sched/omni_ar_scheduler.py`: Token-only chunk handoff for
+  processors that declare `requires_token_updates`.
+- `vllm_omni/deploy/cosyvoice3.yaml`: Default CosyVoice3 deployment settings.
 - `tests/worker/test_gpu_ar_model_runner.py`: Snapshot, guard, connector
   ordering, and background error-propagation tests.
 - [Async Chunk](async_chunk.md): Inter-stage chunking and scheduling design.
