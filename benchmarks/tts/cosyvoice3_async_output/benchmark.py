@@ -40,18 +40,24 @@ def main():
     parser.add_argument("--requests", type=int, default=8)
     parser.add_argument("--warmups", type=int, default=2)
     parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--fixed-tokens", type=int, default=None)
+    parser.add_argument("--warmup-batch-size", type=int, default=1)
+    parser.add_argument("--no-async-chunk", action="store_true")
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--trace-only", action="store_true")
     parser.add_argument("--validation-dir", type=Path, default=Path("/validation"))
     args = parser.parse_args()
-    if args.requests < 1 or args.warmups < 0 or args.concurrency < 1:
-        parser.error("requests/concurrency must be positive and warmups nonnegative")
+    if args.requests < 1 or args.warmups < 0 or args.concurrency < 1 or args.warmup_batch_size < 1:
+        parser.error("requests/concurrency/warmup-batch-size must be positive and warmups nonnegative")
+    if args.fixed_tokens is not None and args.fixed_tokens < 1:
+        parser.error("fixed-tokens must be positive")
     root = args.validation_dir.resolve()
     out_dir = root / "results" / args.label
     out_dir.mkdir(parents=True, exist_ok=True)
     source = Path(vllm_omni.__file__).parent.parent
     model = root / "models" / "Fun-CosyVoice3-0.5B-2512"
     config = yaml.safe_load((source / "vllm_omni/deploy/cosyvoice3.yaml").read_text())
+    config["async_chunk"] = not args.no_async_chunk
     config["connectors"]["connector_of_shared_memory"]["extra"]["codec_chunk_frames"] = 25
     for stage in config["stages"]:
         stage["seed"] = 0
@@ -90,7 +96,8 @@ def main():
             top_p=0.8,
             top_k=25,
             repetition_penalty=1.0001,
-            max_tokens=512,
+            min_tokens=args.fixed_tokens or 0,
+            max_tokens=args.fixed_tokens or 512,
             stop_token_ids=[6562],
             detokenize=False,
             output_kind=RequestOutputKind.DELTA,
@@ -104,7 +111,7 @@ def main():
         deploy_config=str(config_path),
         trust_remote_code=True,
         log_stats=True,
-        async_chunk=True,
+        async_chunk=not args.no_async_chunk,
     )
 
     def run_batch(index, count, save):
@@ -128,12 +135,21 @@ def main():
             state = requests.setdefault(rid, {"ttfa_ms": (now - submitted) * 1000, "chunks": []})
             state["chunks"].append(audio.copy())
             state["last_audio_ms"] = (now - submitted) * 1000
+            output_metrics = getattr(output, "metrics", None)
+            if isinstance(output_metrics, dict):
+                stage_metrics = output_metrics.get("stage_metrics", {}).get("0", {})
+                intervals = stage_metrics.get("vllm_itls_ms")
+                if intervals:
+                    state["ar_itls_ms"] = list(intervals)
         wall_ms = (time.perf_counter() - submitted) * 1000
         assert len(requests) == count, (count, list(requests))
         rows = []
         for rid, state in sorted(requests.items()):
             state["chunk_samples"] = [int(chunk.size) for chunk in state["chunks"]]
-            assert len(state["chunk_samples"]) > 1, "Expected streaming audio chunks; full-output delivery is not TTFA"
+            if not args.no_async_chunk:
+                assert len(state["chunk_samples"]) > 1, (
+                    "Expected streaming audio chunks; full-output delivery is not TTFA"
+                )
             audio = np.concatenate(state.pop("chunks"))
             assert np.isfinite(audio).all() and audio.size > 0
             request_index = index + int(rid.split("_", 1)[0])
@@ -152,7 +168,7 @@ def main():
 
     try:
         for i in range(args.warmups):
-            run_batch(i, 1, False)
+            run_batch(i * args.warmup_batch_size, args.warmup_batch_size, False)
         if args.trace_only:
             omni.start_profile(stages=[0])
             run_batch(0, 1, False)
@@ -161,7 +177,15 @@ def main():
             rows = []
             for i in range(0, args.requests, args.concurrency):
                 rows.extend(run_batch(i, min(args.concurrency, args.requests - i), True))
-            result = {"label": args.label, "source": str(source), "requests": rows, "concurrency": args.concurrency}
+            result = {
+                "label": args.label,
+                "source": str(source),
+                "requests": rows,
+                "concurrency": args.concurrency,
+                "fixed_tokens": args.fixed_tokens,
+                "warmup_requests": args.warmups * args.warmup_batch_size,
+                "async_chunk": not args.no_async_chunk,
+            }
             (out_dir / "metrics.json").write_text(json.dumps(result, indent=2) + "\n")
             print(json.dumps(result, indent=2), flush=True)
     finally:

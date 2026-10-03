@@ -5,6 +5,25 @@ This directory contains the reproduction code and results for
 The implementation and its validation material belong to the same PR branch;
 a separate published validation branch is not needed.
 
+## B2 completion
+
+The [completion report](completion/README.md) includes the complete design
+contract, expanded regression coverage, current-main C=1/C=4 repeated GPU
+acceptance, and diagnostics of the historical 0.28 waveform discrepancy.
+Use its current-main results and scope when reviewing the submitted B2 change.
+The earlier studies below remain historical reproduction evidence.
+
+## Current payload-only cleanup
+
+Following the maintainer's updated B2 scope, CosyVoice3 keeps output
+materialization inline and omits unused Talker hidden payloads in async-chunk
+mode. The processor still receives sampled tokens on payload-free steps.
+The shared GPU runner has no B2 changes.
+
+The [cleanup validation](cleanup/README.md) records the isolated single-GPU
+follow-up and validation against current main. The study below retains the
+previous async-materialization implementation and measurements for provenance.
+
 ## Expanded measurements
 
 The [follow-up study](followup/README.md) adds five paired C=1 rounds,
@@ -18,7 +37,7 @@ The results below retain the earlier two-round observation for provenance.
 
 These are historical measurements on a fixed vLLM 0.28.0-compatible source
 baseline, `3204a0b2ade0f05424b7f11e3bcc03cb3542e0c6`, plus the B2 patch.
-They are not runtime validation of current main, which targets vLLM 0.29.0.
+Current-main validation with vLLM 0.30.0 is reported separately in the cleanup study.
 
 | Round | AR ITL baseline → B2 (ms/token) | TTFA median baseline → B2 (ms) |
 | --- | ---: | ---: |

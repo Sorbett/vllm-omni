@@ -58,14 +58,21 @@ def main():
         assert rows and all(len(row["chunk_samples"]) > 1 for row in rows), f"{label}: rerun with streaming output"
         concurrency = data["concurrency"]
         batch_seconds = sum(row["batch_e2e_ms"] for row in rows if row["index"] % concurrency == 0) / 1000
-        log = (root / f"{label}.log").read_text(errors="replace")
-        # The second BENCHMARK line begins the separate profiler process.
-        unprofiled = log.split(f"BENCHMARK {label}")[1]
-        itls = [
-            (float(value.replace(",", "")), int(count))
-            for value, count in re.findall(r"\| vllm_itls_ms\s*\|\s*([\d,.]+) \(n=(\d+)\)", unprofiled)
-        ]
-        itls = itls[args.warmups :]
+        if all(row.get("ar_itls_ms") for row in rows):
+            # Current main returns native timing arrays in output.metrics.
+            # Reading them avoids enabling DEBUG tables on the request path.
+            itls = [(sum(row["ar_itls_ms"]) / len(row["ar_itls_ms"]), len(row["ar_itls_ms"])) for row in rows]
+            timing_source = "native_output_metrics"
+        else:
+            log = (root / f"{label}.log").read_text(errors="replace")
+            # The second BENCHMARK line begins the separate profiler process.
+            unprofiled = log.split(f"BENCHMARK {label}")[1]
+            itls = [
+                (float(value.replace(",", "")), int(count))
+                for value, count in re.findall(r"\| vllm_itls_ms\s*\|\s*([\d,.]+) \(n=(\d+)\)", unprofiled)
+            ]
+            itls = itls[args.warmups :]
+            timing_source = "legacy_log_tables"
         assert len(itls) == len(rows), (label, "missing per-request AR timing", len(itls), len(rows))
         runs[label] = {
             "concurrency": concurrency,
@@ -75,6 +82,7 @@ def main():
             "audio_seconds_per_second": sum(row["duration_s"] for row in rows) / batch_seconds,
             "unprofiled_ar_itl_ms": sum(value * count for value, count in itls) / sum(count for _, count in itls),
             "ar_token_intervals": sum(count for _, count in itls),
+            "ar_timing_source": timing_source,
             "profiles": profile_summary(root / label / "traces"),
         }
     comparisons = []
