@@ -24,6 +24,7 @@ implementation contract; it is not, by itself, a general support claim.
 - [Async Chunk](feature/async_chunk.md)
 - [Async Diffusion Output](feature/async_diffusion_output.md)
 - [Async Omni Output Materialization](feature/omni_async_output_materialization.md)
+- [CosyVoice3 Talker Output Payloads](feature/cosyvoice3_talker_output_payloads.md)
 - [Runner-to-model Prefill/Decode Phase Contract](feature/preprocess_phase_contract.md)
 - [Automatic Prefix Caching in Omni Models](feature/prefix_caching.md)
 - [Model-local KV Caches](feature/model_local_kv_caches.md)
@@ -57,6 +58,10 @@ implementation contract; it is not, by itself, a general support claim.
 - [Tensor Parallel](feature/tensor_parallel.md)
 - [VAE Patch Parallelism](feature/vae_parallel.md)
 
+#### KV cache and memory management
+
+- [Scheduler-Managed Paged KV Cache for Diffusion DiT Stages](feature/diffusion_paged_kv_cache.md)
+
 #### Attention optimization
 
 The [Diffusion Attention Backends](../user_guide/diffusion/attention_backends.md)
@@ -64,6 +69,7 @@ guides list selectable backends, platform defaults, installation, and tuning.
 The design contracts separate selection mechanics from backend algorithms:
 
 - [Attention Backend Selection](feature/attention_backend_selection.md)
+- [Attention Execution Contract PoC](feature/attention_execution_contract_poc.md)
 - [Skip-Softmax](feature/skip_softmax.md)
 
 #### CPU offloading
@@ -111,3 +117,6 @@ The design contracts separate selection mechanics from backend algorithms:
 The pre-#5137 pages are preserved in the
 [legacy module archive](module/archive/README.md) for historical reference and
 are not active design contracts.
+
+- [Qwen3-Omni MRv2 performance](qwen3_omni_mrv2_performance.md)
+- [MiniCPM-o 4.5 turn-mode MRv2 performance](minicpm_o45_mrv2_performance.md)

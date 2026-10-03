@@ -278,11 +278,6 @@ def talker2code2wav_async_chunk(
         return payload
 
 
-# Decode consumes request.output_token_ids even when no multimodal tensor is
-# emitted. Let the scheduler enqueue these updates before EOS.
-talker2code2wav_async_chunk.requires_token_updates = True  # type: ignore[attr-defined]
-
-
 # ============================================================================
 # Worker-connector data plane (non-async-chunk path).
 # cosyvoice3 talker emits `multimodal_outputs={"embed": {"speech_token": t,
@@ -298,6 +293,10 @@ talker2code2wav_async_chunk.requires_token_updates = True  # type: ignore[attr-d
 # regression where decode unexpectedly re-emits them does not silently
 # duplicate the prefill tensor.  See mixin._FULL_PAYLOAD_REPLACE_KEYS.
 _FULL_PAYLOAD_REPLACE_KEYS: frozenset[str] = frozenset({"embed.speech_token", "embed.speech_feat", "embed.embedding"})
+
+
+# This processor consumes sampled codec IDs even when no tensor payload is emitted.
+talker2code2wav_async_chunk.requires_token_updates = True  # type: ignore[attr-defined]
 
 
 def text2flow_token_only(
