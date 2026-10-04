@@ -5,12 +5,20 @@ This directory contains the reproduction code and results for
 The implementation and its validation material belong to the same PR branch;
 a separate published validation branch is not needed.
 
+## B2 and shared AR output cleanup
+
+The [AR output extension report](ar_output_extension/README.md) is the latest
+acceptance evidence. It compares main, B2 alone, shared AR cleanup alone, and
+their combination on the same single-GPU setup. It also records the isolated
+CPU cost of output construction and metadata snapshots. Earlier reports are
+retained with their original source snapshots and limitations.
+
 ## B2 completion
 
 The [completion report](completion/README.md) includes the complete design
 contract, expanded regression coverage, current-main C=1/C=4 repeated GPU
 acceptance, and diagnostics of the historical 0.28 waveform discrepancy.
-Use its current-main results and scope when reviewing the submitted B2 change.
+Use its results and scope when reviewing the original B2-only change.
 The earlier studies below remain historical reproduction evidence.
 
 ## Current payload-only cleanup
@@ -18,7 +26,9 @@ The earlier studies below remain historical reproduction evidence.
 Following the maintainer's updated B2 scope, CosyVoice3 keeps output
 materialization inline and omits unused Talker hidden payloads in async-chunk
 mode. The processor still receives sampled tokens on payload-free steps.
-The shared GPU runner has no B2 changes.
+The original B2-only change did not modify the shared GPU runner. The AR
+extension adds output construction and metadata cleanup within that same
+output path.
 
 The [cleanup validation](cleanup/README.md) records the isolated single-GPU
 follow-up and validation against current main. The study below retains the

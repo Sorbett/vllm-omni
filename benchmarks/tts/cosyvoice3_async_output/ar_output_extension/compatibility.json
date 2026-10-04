@@ -1,0 +1,18 @@
+{
+  "1": {
+    "labels": {
+      "main": "main-sync-r1-c1",
+      "combined": "combined-sync-r1-c1"
+    },
+    "waveforms_equal": 8,
+    "requests": 8
+  },
+  "4": {
+    "labels": {
+      "main": "main-sync-r1-c4",
+      "combined": "combined-sync-r1-c4"
+    },
+    "waveforms_equal": 8,
+    "requests": 8
+  }
+}

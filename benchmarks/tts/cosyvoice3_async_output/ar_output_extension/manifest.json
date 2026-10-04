@@ -1,0 +1,151 @@
+{
+  "main_baseline": "3ab726c126d760f6052c815b9bdced135cd86154",
+  "b2_baseline": "9628bcd23c2afaeba40f0045e353675ef0f98dbf",
+  "implementation_commit": "e10f4e9506d3ba61cdf2310289b62fc0685fbb4e",
+  "source_plan": {
+    "variants": {
+      "main": {
+        "base_commit": "3ab726c126d760f6052c815b9bdced135cd86154",
+        "source": "/validation/ar-output-extension-20261004/main",
+        "hashes": {
+          "vllm_omni/model_executor/models/cosyvoice3/cosyvoice3.py": "450f7ae941b62f000923ef7e35ddff206cbb654af5c41f9fd592372e2808fe93",
+          "vllm_omni/model_executor/stage_input_processors/cosyvoice3.py": "ab92386f19a0e056b139b8dabad64e694ed74eb05c430aac7f721b9599f0ee8a",
+          "vllm_omni/core/sched/omni_ar_scheduler.py": "94bb6fa8f82dc98fe60c4a053b30428fb9769474410e76762400158398e8b2ca",
+          "vllm_omni/worker/gpu_ar_model_runner.py": "5691ecb33d230a45c9120daed7ab4dc8729f3062ad68e853a11e7bceefb257bd"
+        }
+      },
+      "b2": {
+        "base_commit": "9628bcd23c2afaeba40f0045e353675ef0f98dbf",
+        "source": "/validation/ar-output-extension-20261004/b2",
+        "hashes": {
+          "vllm_omni/model_executor/models/cosyvoice3/cosyvoice3.py": "6e3033f0faf5dff87ab23c52ad6a47a2c3b91cf1c1834c8c911cd00a975db399",
+          "vllm_omni/model_executor/stage_input_processors/cosyvoice3.py": "cf2fb2233881a237c732154395fd344e3e834161858705952af3b9b28dc4b103",
+          "vllm_omni/core/sched/omni_ar_scheduler.py": "b409b690a2058a4e54f80d632a90cd4b77502e44b4dc933ae516fc5d35dc2eb4",
+          "vllm_omni/worker/gpu_ar_model_runner.py": "5691ecb33d230a45c9120daed7ab4dc8729f3062ad68e853a11e7bceefb257bd"
+        }
+      },
+      "ar": {
+        "base_commit": "3ab726c126d760f6052c815b9bdced135cd86154",
+        "source": "/validation/ar-output-extension-20261004/ar",
+        "hashes": {
+          "vllm_omni/model_executor/models/cosyvoice3/cosyvoice3.py": "450f7ae941b62f000923ef7e35ddff206cbb654af5c41f9fd592372e2808fe93",
+          "vllm_omni/model_executor/stage_input_processors/cosyvoice3.py": "ab92386f19a0e056b139b8dabad64e694ed74eb05c430aac7f721b9599f0ee8a",
+          "vllm_omni/core/sched/omni_ar_scheduler.py": "94bb6fa8f82dc98fe60c4a053b30428fb9769474410e76762400158398e8b2ca",
+          "vllm_omni/worker/gpu_ar_model_runner.py": "7d4016c04504a2c02d67165986b98699a470da502ab524db2d128c98924e0193"
+        }
+      },
+      "combined": {
+        "base_commit": "9628bcd23c2afaeba40f0045e353675ef0f98dbf",
+        "source": "/validation/ar-output-extension-20261004/combined",
+        "hashes": {
+          "vllm_omni/model_executor/models/cosyvoice3/cosyvoice3.py": "6e3033f0faf5dff87ab23c52ad6a47a2c3b91cf1c1834c8c911cd00a975db399",
+          "vllm_omni/model_executor/stage_input_processors/cosyvoice3.py": "cf2fb2233881a237c732154395fd344e3e834161858705952af3b9b28dc4b103",
+          "vllm_omni/core/sched/omni_ar_scheduler.py": "b409b690a2058a4e54f80d632a90cd4b77502e44b4dc933ae516fc5d35dc2eb4",
+          "vllm_omni/worker/gpu_ar_model_runner.py": "7d4016c04504a2c02d67165986b98699a470da502ab524db2d128c98924e0193"
+        }
+      }
+    },
+    "benchmark_sha256": "7f33e3466c8f80c0def559e67f37d86653aaae4493cb0dcc5d5de4f93e440f30"
+  },
+  "environment": {
+    "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+    "packages": {
+      "vllm": "0.30.0+cu129",
+      "torch": "2.13.0+cu129",
+      "transformers": "5.14.1",
+      "torchaudio": "2.11.0+cu129",
+      "torchvision": "0.28.0+cu129",
+      "huggingface-hub": "1.31.0"
+    },
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_uuid": "GPU-a745f6de-5fdb-68be-310e-5b6649033cd2",
+    "visible_gpus": 1,
+    "reported_vram_mib": 49140.0,
+    "driver": "550.127.05"
+  },
+  "flow_backend": "torch",
+  "model_revision": "29e01c4e8d000f4bcd70751be16fa94bf3d85a18",
+  "fixed_tokens": 128,
+  "requests_per_concurrency_cell": 8,
+  "warmup_full_batches_per_cell": 2,
+  "paired_process_rounds": 3,
+  "process_variant_orders": [
+    [
+      "main",
+      "b2",
+      "ar",
+      "combined"
+    ],
+    [
+      "combined",
+      "ar",
+      "b2",
+      "main"
+    ],
+    [
+      "b2",
+      "main",
+      "combined",
+      "ar"
+    ]
+  ],
+  "concurrency_orders": [
+    [
+      1,
+      4
+    ],
+    [
+      4,
+      1
+    ],
+    [
+      1,
+      4
+    ]
+  ],
+  "gpu_only_index": 0,
+  "profiler_enabled": false,
+  "nvml_sample_period_seconds": 0.5,
+  "cpu_affinity_pinned": false,
+  "gpu_clocks_locked": false,
+  "cpu_regression": {
+    "passed": 345,
+    "warnings": 18,
+    "seconds": 6.88
+  },
+  "working_tree_matches_validated_runtime_files": true,
+  "legacy_compatibility": {
+    "1": {
+      "labels": {
+        "main": "main-sync-r1-c1",
+        "combined": "combined-sync-r1-c1"
+      },
+      "waveforms_equal": 8,
+      "requests": 8
+    },
+    "4": {
+      "labels": {
+        "main": "main-sync-r1-c4",
+        "combined": "combined-sync-r1-c4"
+      },
+      "waveforms_equal": 8,
+      "requests": 8
+    }
+  },
+  "service_restoration": {
+    "service-restoration.json": {
+      "service": "qwen38-vllm.service",
+      "start_utc": "2026-10-04T06:50:12Z",
+      "experiment_exit_code": 0,
+      "health_200": true,
+      "finish_utc": "2026-10-04T07:27:33Z"
+    },
+    "compatibility-service-restoration.json": {
+      "service": "qwen38-vllm.service",
+      "start_utc": "2026-10-04T07:28:31Z",
+      "experiment_exit_code": 0,
+      "health_200": true,
+      "finish_utc": "2026-10-04T07:35:14Z"
+    }
+  }
+}
