@@ -34,6 +34,10 @@ policy, and Code2Wav computation unchanged.
 | Final async-chunk update | Remaining valid codec IDs | Existing request conditioning | Omitted |
 | Legacy non-async-chunk execution | Existing token path | Existing full-payload path | Existing policy retained |
 
+The Talker forward returns hidden states. The runner attaches the live
+step's conditioning with `make_omni_output` after CUDA graph replay, so
+decode does not reuse conditioning containers from graph capture.
+
 Conditioning includes prompt speech tokens, prompt speech features, speaker
 embedding, and the prompt token lengths needed to remove batch padding.
 The runner partitions these values by request. The chunk processor removes
@@ -87,6 +91,33 @@ is preserved, including the pre-existing packed-inference opt-in.
 
 The default CosyVoice3 deployment disables prefix caching. This cleanup
 does not establish an additional prefix-cache compatibility claim.
+
+## Empty AR output construction
+
+The shared AR runner skips per-request pooler construction when a step has
+no hidden payload, no multimodal payload, no prefix cache, and no pending
+model postprocess. This avoids building and then discarding an empty payload
+for every request on a token-only decode step. It preserves the sampled
+tokens, logprobs, connector metadata, and routed-expert output.
+
+This is a payload-based guard, rather than a CosyVoice3-specific fast path.
+Nonempty prefill conditioning, hidden-bearing models, prefix-cache merges,
+and model postprocess retain the normal construction path. The guard checks
+mapping size without evaluating a tensor's truth value or reading device
+data.
+
+## Output metadata lifetime
+
+Inline output construction completes before the next model execution can
+reuse the query-offset and scheduled-token buffers. It can therefore consume
+those buffers and the scheduler output directly. Background output
+materialization retains its snapshots of the step metadata.
+
+Both paths reuse the request-ID list and index map that upstream vLLM's
+bookkeeping has already copied from the input batch. The completed output
+continues to own these containers even when sampled-token feedback is
+asynchronous. Connector collection remains on the main thread because it
+can execute a tensor-parallel collective.
 
 ## Correctness validation
 

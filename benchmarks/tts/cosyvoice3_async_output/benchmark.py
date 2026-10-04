@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--requests", type=int, default=8)
     parser.add_argument("--warmups", type=int, default=2)
     parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--concurrency-matrix", type=int, nargs="+", default=None)
     parser.add_argument("--fixed-tokens", type=int, default=None)
     parser.add_argument("--warmup-batch-size", type=int, default=1)
     parser.add_argument("--no-async-chunk", action="store_true")
@@ -51,6 +52,13 @@ def main():
         parser.error("requests/concurrency/warmup-batch-size must be positive and warmups nonnegative")
     if args.fixed_tokens is not None and args.fixed_tokens < 1:
         parser.error("fixed-tokens must be positive")
+    if args.concurrency_matrix is not None:
+        if any(c < 1 for c in args.concurrency_matrix) or len(set(args.concurrency_matrix)) != len(
+            args.concurrency_matrix
+        ):
+            parser.error("concurrency-matrix values must be unique and positive")
+        if args.trace_only or args.profile:
+            parser.error("concurrency-matrix is for uninstrumented runs only")
     root = args.validation_dir.resolve()
     out_dir = root / "results" / args.label
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -167,27 +175,34 @@ def main():
         return rows
 
     try:
-        for i in range(args.warmups):
-            run_batch(i * args.warmup_batch_size, args.warmup_batch_size, False)
-        if args.trace_only:
-            omni.start_profile(stages=[0])
-            run_batch(0, 1, False)
-            omni.stop_profile(stages=[0])
-        else:
-            rows = []
-            for i in range(0, args.requests, args.concurrency):
-                rows.extend(run_batch(i, min(args.concurrency, args.requests - i), True))
-            result = {
-                "label": args.label,
-                "source": str(source),
-                "requests": rows,
-                "concurrency": args.concurrency,
-                "fixed_tokens": args.fixed_tokens,
-                "warmup_requests": args.warmups * args.warmup_batch_size,
-                "async_chunk": not args.no_async_chunk,
-            }
-            (out_dir / "metrics.json").write_text(json.dumps(result, indent=2) + "\n")
-            print(json.dumps(result, indent=2), flush=True)
+        # Reuse one engine across concurrency cells, warming each full batch.
+        # This reduces startup cost without changing measured request work.
+        for concurrency in args.concurrency_matrix or [args.concurrency]:
+            warmup_batch_size = concurrency if args.concurrency_matrix else args.warmup_batch_size
+            label = f"{args.label}-c{concurrency}" if args.concurrency_matrix else args.label
+            out_dir = root / "results" / label
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for i in range(args.warmups):
+                run_batch(i * warmup_batch_size, warmup_batch_size, False)
+            if args.trace_only:
+                omni.start_profile(stages=[0])
+                run_batch(0, 1, False)
+                omni.stop_profile(stages=[0])
+            else:
+                rows = []
+                for i in range(0, args.requests, concurrency):
+                    rows.extend(run_batch(i, min(concurrency, args.requests - i), True))
+                result = {
+                    "label": label,
+                    "source": str(source),
+                    "requests": rows,
+                    "concurrency": concurrency,
+                    "fixed_tokens": args.fixed_tokens,
+                    "warmup_requests": args.warmups * warmup_batch_size,
+                    "async_chunk": not args.no_async_chunk,
+                }
+                (out_dir / "metrics.json").write_text(json.dumps(result, indent=2) + "\n")
+                print(json.dumps(result, indent=2), flush=True)
     finally:
         omni.close()
     if args.profile and not args.trace_only:

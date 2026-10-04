@@ -263,12 +263,13 @@ def test_talker_inline_output_preserves_conditioning_and_tokens(
         "embedding": torch.tensor([[0.1, 0.2], [0.3, 0.4]]),
     }
     expected = {key: value.clone() for key, value in conditioning.items()}
-    model_output = output_payload_talker.forward(
+    hidden_states = output_payload_talker.forward(
         input_ids=torch.tensor([1, 2, 3]),
         positions=torch.arange(3),
         inputs_embeds=torch.ones(3, 16),
         **(conditioning if is_prefill else {}),
     )
+    model_output = output_payload_talker.make_omni_output(hidden_states, **(conditioning if is_prefill else {}))
     from vllm_omni.worker import gpu_ar_model_runner
 
     cpu_materialization = mocker.spy(gpu_ar_model_runner, "_to_cpu_contiguous")
