@@ -15,6 +15,8 @@ import numpy as np
 import pytest
 import torch
 from vllm.sampling_params import SamplingParams
+from vllm.v1.core.sched.output import SchedulerOutput
+from vllm.v1.outputs import SamplerOutput
 from vllm.v1.sample.metadata import SamplingMetadata
 from vllm.v1.utils import CpuGpuBuffer
 from vllm.v1.worker import gpu_input_batch
@@ -25,7 +27,7 @@ from vllm_omni.entrypoints.openai.protocol.audio import OpenAICreateSpeechReques
 from vllm_omni.entrypoints.openai.serving_speech import OmniOpenAIServingSpeech
 from vllm_omni.entrypoints.openai.tts_adapters.base import PreparedRequest
 from vllm_omni.outputs import OmniModelRunnerOutput
-from vllm_omni.worker import sparse_audio
+from vllm_omni.worker import gpu_ar_model_runner, sparse_audio
 from vllm_omni.worker.gpu_ar_model_runner import (
     ExecuteModelState,
     GPUARModelRunner,
@@ -1957,8 +1959,6 @@ def test_prepare_hook_keeps_legacy_signature_and_orders_opt_in_metadata(accepts_
 
 @pytest.fixture
 def token_only_builder(monkeypatch):
-    from vllm.v1.core.sched.output import SchedulerOutput
-
     runner = _make_async_output_runner()
     runner._pooler_payload_include_hidden_flag = False
     runner.supports_mm_inputs = True
@@ -2056,10 +2056,6 @@ def test_query_metadata_lifetime_matches_materialization_mode(snapshot):
 
 def test_background_output_survives_step_metadata_reuse(monkeypatch, mocker):
     """Delay the real builder until offsets, batch IDs and counts are reused."""
-    from vllm.v1.core.sched.output import SchedulerOutput
-    from vllm.v1.outputs import SamplerOutput
-
-    from vllm_omni.worker import gpu_ar_model_runner
 
     runner = _make_async_output_runner()
     runner.use_async_scheduling = True

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+from vllm.sampling_params import SamplingParams
 
 from vllm_omni.data_entry_keys import serialize_payload
 from vllm_omni.model_executor.stage_input_processors.cosyvoice3 import (
@@ -14,6 +15,7 @@ from vllm_omni.model_executor.stage_input_processors.cosyvoice3 import (
     text2flow_token_only,
 )
 from vllm_omni.outputs.mm_outputs import MultimodalPayload
+from vllm_omni.request import OmniRequest
 
 pytestmark = [pytest.mark.core_model, pytest.mark.cpu]
 
@@ -377,10 +379,6 @@ def test_talker2code2wav_async_chunk_emits_terminal_eof_without_duplicate_audio(
 
 
 def test_interleaved_token_only_requests_keep_conditioning_and_eof_separate():
-    from vllm import SamplingParams
-
-    from vllm_omni.request import OmniRequest
-
     transfer_manager = _transfer_manager()
     requests = [
         OmniRequest(
